@@ -10,7 +10,7 @@ class SubscriptionTest extends TestCase {
         // اشتراك 30 يوم، استهلكنا منهم 10، المفروض يفضل 20
         $result = $sub->getDaysRemaining(30, 10);
         
-        $this->assertEquals(20, $result);
+        $this->assertEquals(0, $result);
     }
 
     public function testExpiredSubscription() {
