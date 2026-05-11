@@ -252,6 +252,12 @@ pipeline {
 }
 ```
 
+<img width="974" height="266" alt="Screenshot from 2026-05-11 17-02-12" src="https://github.com/user-attachments/assets/2cf495d7-0ecf-4bf9-9bc0-5ab022325ad1" />
+
+<img width="1280" height="800" alt="Screenshot from 2026-05-11 16-54-22" src="https://github.com/user-attachments/assets/f67c8060-014b-49dc-b731-a38ee657be19" />
+
+<img width="1280" height="800" alt="Screenshot from 2026-05-11 16-20-45" src="https://github.com/user-attachments/assets/82569c1c-ab29-4dd1-a91e-28ed166c342b" />
+
 ---
 
 # Step 9 – Trigger Automatic Build
