@@ -29,7 +29,7 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('sonarqube') {
-                    withCredentials([string(credentialsId: 'habiba', variable: 'SONAR_TOKEN')]) {
+                    withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
                         sh '''
                             /opt/sonar-scanner/bin/sonar-scanner \
                             -Dsonar.projectKey=service-app \
