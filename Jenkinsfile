@@ -8,7 +8,11 @@ pipeline {
     
     stages {
         stage('Checkout') {
-            // ... existing checkout code
+            steps {
+                git branch: 'main', 
+                    url: 'https://github.com/maisson88/digi-jenkins.git',
+                    credentialsId: 'github-pat-creds'
+            }
         }
         
         stage('SonarQube Analysis') {
@@ -31,6 +35,18 @@ pipeline {
                     waitForQualityGate abortPipeline: true
                 }
             }
+        }
+    }
+    
+    post {
+        always {
+            echo 'Pipeline job finished.'
+        }
+        success {
+            echo 'SonarQube analysis completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed. Please check the logs.'
         }
     }
 }
