@@ -46,7 +46,7 @@ pipeline {
                         sonarsource/sonar-scanner-cli \
                         -Dsonar.projectKey=service-app \
                         -Dsonar.sources=. \
-                        -Dsonar.host.url=http://localhost:9000 \
+                        -Dsonar.host.url=http://44.204.14.72:9000 \
                         -Dsonar.login=$SONAR_TOKEN
                     '''
                 }
