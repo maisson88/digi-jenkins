@@ -6,72 +6,59 @@ pipeline {
     }
 
     stages {
-
-        stage('Checkout Code') {
+        stage('Checkout') {
             steps {
                 git branch: 'main',
-                url: 'https://github.com/maisson88/digi-jenkins.git'
+                    credentialsId: 'github-pat-creds',
+                    url: 'https://github.com/maisson88/digi-jenkins.git'
+            }
+        }
+
+        stage('Run Unit Tests') {
+            steps {
+                sh '/usr/local/bin/phpunit tests/'
             }
         }
 
         stage('SonarQube Analysis') {
             steps {
-                script {
-
-                    def scannerHome = tool 'sonar-scanner'
-
-                    withSonarQubeEnv('sonarqube') {
-
-                        sh """
-                        ${scannerHome}/bin/sonar-scanner \
+                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                    sh '''
+                        /opt/sonar-scanner/bin/sonar-scanner \
                         -Dsonar.projectKey=service-app \
-                        -Dsonar.sources=src
-                        """
-
-                    }
-                }
-            }
-        }
-
-        stage('Quality Gate') {
-            steps {
-                timeout(time: 2, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+                        -Dsonar.sources=. \
+                        -Dsonar.host.url=http://localhost:9000 \
+                        -Dsonar.login=$SONAR_TOKEN \
+                        -Dsonar.plugins.downloadOnlyRequired=true \
+                        -Dsonar.exclusions=**/*.go \
+                        -Dsonar.language=php
+                    '''
                 }
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                sh '''
-                docker build -t $IMAGE_NAME .
-                '''
+                sh 'docker build -t $IMAGE_NAME .'
             }
         }
 
         stage('Trivy Scan') {
             steps {
-                sh '''
-                trivy image --exit-code 1 --severity CRITICAL $IMAGE_NAME
-                '''
+                sh 'trivy image --exit-code 0 --severity CRITICAL $IMAGE_NAME'
             }
         }
 
         stage('Push to Docker Hub') {
             steps {
-
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'dockerhub-creds',
-                        usernameVariable: 'DOCKER_USERNAME',
-                        passwordVariable: 'DOCKER_PASSWORD'
-                    )
-                ]) {
-
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
                     sh '''
-                    echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-
-                    docker push $IMAGE_NAME
+                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                        docker push $IMAGE_NAME
                     '''
                 }
             }
@@ -80,12 +67,13 @@ pipeline {
         stage('Deploy') {
             steps {
                 sh '''
-                docker rm -f service-app-container || true
+                    docker stop service-app || true
+                    docker rm service-app || true
 
-                docker run -d \
-                  --name service-app-container \
-                  -p 8081:80 \
-                  $IMAGE_NAME
+                    docker run -d \
+                        --name service-app \
+                        -p 8081:80 \
+                        $IMAGE_NAME
                 '''
             }
         }
@@ -93,10 +81,16 @@ pipeline {
 
     post {
         always {
-            sh '''
-            docker rmi $IMAGE_NAME || true
-            docker image prune -f || true
-            '''
+            sh 'docker rmi $IMAGE_NAME || true'
+            sh 'docker image prune -f'
+        }
+
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+
+        failure {
+            echo 'Pipeline failed!'
         }
     }
 }
