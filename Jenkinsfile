@@ -1,10 +1,6 @@
 pipeline {
     agent any
 
-    tools {
-        sonarQubeScanner 'sonar-scanner'
-    }
-
     environment {
         IMAGE_NAME = "maisoonahmed71/service-app:${BUILD_NUMBER}"
     }
@@ -22,14 +18,17 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 script {
+
                     def scannerHome = tool 'sonar-scanner'
 
                     withSonarQubeEnv('sonarqube') {
+
                         sh """
                         ${scannerHome}/bin/sonar-scanner \
-                          -Dsonar.projectKey=service-app \
-                          -Dsonar.sources=src
+                        -Dsonar.projectKey=service-app \
+                        -Dsonar.sources=src
                         """
+
                     }
                 }
             }
@@ -61,11 +60,14 @@ pipeline {
 
         stage('Push to Docker Hub') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-creds',
-                    usernameVariable: 'DOCKER_USERNAME',
-                    passwordVariable: 'DOCKER_PASSWORD'
-                )]) {
+
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DOCKER_USERNAME',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )
+                ]) {
 
                     sh '''
                     echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
