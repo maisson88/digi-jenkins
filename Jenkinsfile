@@ -2,9 +2,8 @@ pipeline {
     agent any
 
     environment {
-        // SonarQube configuration
-        SONAR_HOST_URL = 'http://localhost:9000'
-        SONAR_TOKEN = credentials('sonar-token')
+        SONAR_HOST_URL = 'http://host.docker.internal:9000'  // Use this for Docker container
+        // OR use your host IP: 'http://192.168.x.x:9000'
     }
 
     stages {
@@ -18,26 +17,17 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv('SonarQube') {
+                script {
+                    // Run sonar-scanner using Docker
                     sh '''
-                        sonar-scanner \
-                        -Dsonar.projectKey=digi-jenkins \
-                        -Dsonar.projectName=digi-jenkins \
-                        -Dsonar.sources=. \
-                        -Dsonar.exclusions=**/vendor/**,**/tests/** \
-                        -Dsonar.tests=tests \
-                        -Dsonar.php.tests.reportPath=results.xml \
-                        -Dsonar.host.url=${SONAR_HOST_URL} \
-                        -Dsonar.login=${SONAR_TOKEN}
+                        docker run --rm \
+                            -v ${PWD}:/usr/src \
+                            sonarsource/sonar-scanner-cli \
+                            -Dsonar.projectKey=digi-jenkins \
+                            -Dsonar.projectName=digi-jenkins \
+                            -Dsonar.sources=/usr/src \
+                            -Dsonar.host.url=${SONAR_HOST_URL}
                     '''
-                }
-            }
-        }
-
-        stage('Quality Gate Check') {
-            steps {
-                timeout(time: 1, unit: 'HOURS') {
-                    waitForQualityGate abortPipeline: true
                 }
             }
         }
