@@ -4,7 +4,10 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/maisson88/digi-jenkins.git'
+                // Method 1: Using git step with credentials
+                git branch: 'main', 
+                    url: 'https://github.com/maisson88/digi-jenkins.git',
+                    credentialsId: 'github-pat-creds'
             }
         }
 
