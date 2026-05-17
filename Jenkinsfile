@@ -3,21 +3,9 @@ pipeline {
 
     environment {
         IMAGE_NAME = "maisoonahmed71/service-app:${BUILD_NUMBER}"
-
-        PATH = "/usr/local/bin:/usr/bin:/bin:/opt/sonar-scanner/bin"
     }
 
     stages {
-
-        stage('Debug Tools') {
-            steps {
-                sh '''
-                    echo "PATH=$PATH"
-                    which docker || true
-                    which sonar-scanner || true
-                '''
-            }
-        }
 
         stage('Checkout') {
             steps {
@@ -27,13 +15,23 @@ pipeline {
             }
         }
 
+        stage('Debug Tools') {
+            steps {
+                sh '''
+                    echo "Checking tools..."
+                    which docker || echo "Docker NOT FOUND"
+                    which php || echo "PHP NOT FOUND"
+                '''
+            }
+        }
+
         stage('Run Unit Tests') {
             steps {
                 sh '''
                     if command -v phpunit >/dev/null 2>&1; then
                         phpunit tests || true
                     else
-                        echo "PHPUnit not installed"
+                        echo "PHPUnit not installed - skipping tests"
                     fi
                 '''
             }
@@ -43,7 +41,9 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
                     sh '''
-                        /opt/sonar-scanner/bin/sonar-scanner \
+                        docker run --rm \
+                        -v $PWD:/usr/src \
+                        sonarsource/sonar-scanner-cli \
                         -Dsonar.projectKey=service-app \
                         -Dsonar.sources=. \
                         -Dsonar.host.url=http://localhost:9000 \
@@ -56,7 +56,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 sh '''
-                    docker version
+                    docker version || true
                     docker build -t $IMAGE_NAME .
                 '''
             }
@@ -103,6 +103,14 @@ pipeline {
     post {
         always {
             sh 'docker image prune -f || true'
+        }
+
+        success {
+            echo "Pipeline SUCCESS"
+        }
+
+        failure {
+            echo "Pipeline FAILED"
         }
     }
 }
