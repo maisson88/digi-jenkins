@@ -3,7 +3,6 @@ pipeline {
 
     environment {
         IMAGE_NAME = "maisoonahmed71/service-app:${BUILD_NUMBER}"
-        SONAR_SCANNER_HOME = "/opt/sonar-scanner"
     }
 
     stages {
@@ -16,29 +15,24 @@ pipeline {
             }
         }
 
-        stage('Debug Tools') {
+        stage('Run Unit Tests') {
             steps {
-                sh '''
-                    echo "PATH=$PATH"
-                    which docker || echo "Docker NOT FOUND"
-                    which php || echo "PHP NOT FOUND"
-                    which sonar-scanner || echo "Sonar NOT FOUND"
-                '''
+                sh '/usr/local/bin/phpunit tests/'
             }
         }
 
         stage('SonarQube Analysis') {
             steps {
-                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                withCredentials([string(credentialsId: 'maison', variable: 'SONAR_TOKEN')]) {
                     sh '''
-                        export PATH=$PATH:/opt/sonar-scanner/bin
-
                         /opt/sonar-scanner/bin/sonar-scanner \
-                            -Dsonar.projectKey=service-app \
-                            -Dsonar.projectName=service-app \
-                            -Dsonar.sources=. \
-                            -Dsonar.host.url=http://localhost:9000 \
-                            -Dsonar.login=$SONAR_TOKEN
+                        -Dsonar.projectKey=service-app \
+                        -Dsonar.sources=. \
+                        -Dsonar.host.url=http://localhost:9000 \
+                        -Dsonar.login=$SONAR_TOKEN \
+                        -Dsonar.plugins.downloadOnlyRequired=true \
+                        -Dsonar.exclusions=**/*.go \
+                        -Dsonar.language=php
                     '''
                 }
             }
@@ -46,25 +40,13 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh '''
-                    if command -v docker >/dev/null 2>&1; then
-                        docker build -t $IMAGE_NAME .
-                    else
-                        echo "Docker not installed - skipping build"
-                    fi
-                '''
+                sh 'docker build -t $IMAGE_NAME .'
             }
         }
 
         stage('Trivy Scan') {
             steps {
-                sh '''
-                    if command -v trivy >/dev/null 2>&1; then
-                        trivy image --exit-code 0 --severity CRITICAL $IMAGE_NAME || true
-                    else
-                        echo "Trivy not installed"
-                    fi
-                '''
+                sh 'trivy image --exit-code 0 --severity CRITICAL $IMAGE_NAME'
             }
         }
 
@@ -76,12 +58,8 @@ pipeline {
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
                     sh '''
-                        if command -v docker >/dev/null 2>&1; then
-                            echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                            docker push $IMAGE_NAME
-                        else
-                            echo "Docker not available - skipping push"
-                        fi
+                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                        docker push $IMAGE_NAME
                     '''
                 }
             }
@@ -90,17 +68,13 @@ pipeline {
         stage('Deploy') {
             steps {
                 sh '''
-                    if command -v docker >/dev/null 2>&1; then
-                        docker stop service-app || true
-                        docker rm service-app || true
+                    docker stop service-app || true
+                    docker rm service-app || true
 
-                        docker run -d \
-                            --name service-app \
-                            -p 8081:80 \
-                            $IMAGE_NAME
-                    else
-                        echo "Docker not available - skipping deploy"
-                    fi
+                    docker run -d \
+                        --name service-app \
+                        -p 8081:80 \
+                        $IMAGE_NAME
                 '''
             }
         }
@@ -108,15 +82,16 @@ pipeline {
 
     post {
         always {
-            sh 'docker image prune -f || true'
+            sh 'docker rmi $IMAGE_NAME || true'
+            sh 'docker image prune -f'
         }
 
         success {
-            echo "Pipeline SUCCESS"
+            echo 'Pipeline completed successfully!'
         }
 
         failure {
-            echo "Pipeline FAILED"
+            echo 'Pipeline failed!'
         }
     }
 }
