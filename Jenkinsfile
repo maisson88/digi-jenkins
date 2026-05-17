@@ -1,7 +1,7 @@
 pipeline {
 
     agent {
-        label 'ec2-agent'
+        label 'ec2-agent2'
     }
 
     environment {
