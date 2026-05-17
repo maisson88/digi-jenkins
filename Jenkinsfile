@@ -2,15 +2,28 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "maisson88/service-app:${BUILD_NUMBER}"
+        IMAGE_NAME = "maisoonahmed71/service-app:${BUILD_NUMBER}"
+
+        PATH = "/usr/local/bin:/usr/bin:/bin:/opt/sonar-scanner/bin"
     }
 
     stages {
 
+        stage('Debug Tools') {
+            steps {
+                sh '''
+                    echo "PATH=$PATH"
+                    which docker || true
+                    which sonar-scanner || true
+                '''
+            }
+        }
+
         stage('Checkout') {
             steps {
-                git url: 'https://github.com/maisson88/digi-jenkins.git',
-                    branch: 'main'
+                git branch: 'main',
+                    credentialsId: 'github-pat-creds',
+                    url: 'https://github.com/maisson88/digi-jenkins.git'
             }
         }
 
@@ -20,7 +33,7 @@ pipeline {
                     if command -v phpunit >/dev/null 2>&1; then
                         phpunit tests || true
                     else
-                        echo "PHPUnit not installed - skipping tests"
+                        echo "PHPUnit not installed"
                     fi
                 '''
             }
@@ -28,34 +41,31 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv('sonarqube') {
-                    withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
-                        sh '''
-                            /opt/sonar-scanner/bin/sonar-scanner \
-                            -Dsonar.projectKey=service-app \
-                            -Dsonar.sources=. \
-                            -Dsonar.host.url=http://localhost:9000 \
-                            -Dsonar.login=$SONAR_TOKEN
-                        '''
-                    }
+                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                    sh '''
+                        /opt/sonar-scanner/bin/sonar-scanner \
+                        -Dsonar.projectKey=service-app \
+                        -Dsonar.sources=. \
+                        -Dsonar.host.url=http://localhost:9000 \
+                        -Dsonar.login=$SONAR_TOKEN
+                    '''
                 }
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t $IMAGE_NAME .'
+                sh '''
+                    docker version
+                    docker build -t $IMAGE_NAME .
+                '''
             }
         }
 
         stage('Trivy Scan') {
             steps {
                 sh '''
-                    if command -v trivy >/dev/null 2>&1; then
-                        trivy image --severity CRITICAL $IMAGE_NAME || true
-                    else
-                        echo "Trivy not installed - skipping scan"
-                    fi
+                    trivy image --exit-code 0 --severity CRITICAL $IMAGE_NAME || true
                 '''
             }
         }
@@ -93,14 +103,6 @@ pipeline {
     post {
         always {
             sh 'docker image prune -f || true'
-        }
-
-        success {
-            echo 'Pipeline SUCCESS ✔'
-        }
-
-        failure {
-            echo 'Pipeline FAILED ✖'
         }
     }
 }
