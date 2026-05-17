@@ -1,13 +1,44 @@
 pipeline {
     agent any
 
+    environment {
+        // SonarQube configuration
+        SONAR_HOST_URL = 'http://localhost:9000'
+        SONAR_TOKEN = credentials('sonar-token')
+    }
+
     stages {
         stage('Checkout') {
             steps {
-                // Method 1: Using git step with credentials
                 git branch: 'main', 
                     url: 'https://github.com/maisson88/digi-jenkins.git',
                     credentialsId: 'github-pat-creds'
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('SonarQube') {
+                    sh '''
+                        sonar-scanner \
+                        -Dsonar.projectKey=digi-jenkins \
+                        -Dsonar.projectName=digi-jenkins \
+                        -Dsonar.sources=. \
+                        -Dsonar.exclusions=**/vendor/**,**/tests/** \
+                        -Dsonar.tests=tests \
+                        -Dsonar.php.tests.reportPath=results.xml \
+                        -Dsonar.host.url=${SONAR_HOST_URL} \
+                        -Dsonar.login=${SONAR_TOKEN}
+                    '''
+                }
+            }
+        }
+
+        stage('Quality Gate Check') {
+            steps {
+                timeout(time: 1, unit: 'HOURS') {
+                    waitForQualityGate abortPipeline: true
+                }
             }
         }
 
