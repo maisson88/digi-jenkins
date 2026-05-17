@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    tools {
+        sonarQubeScanner 'sonar-scanner'
+    }
+
     environment {
         IMAGE_NAME = "maisoonahmed71/service-app:${BUILD_NUMBER}"
     }
@@ -17,12 +21,16 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv('sonarqube') {
-                    sh '''
-                    sonar-scanner \
-                      -Dsonar.projectKey=service-app \
-                      -Dsonar.sources=src
-                    '''
+                script {
+                    def scannerHome = tool 'sonar-scanner'
+
+                    withSonarQubeEnv('sonarqube') {
+                        sh """
+                        ${scannerHome}/bin/sonar-scanner \
+                          -Dsonar.projectKey=service-app \
+                          -Dsonar.sources=src
+                        """
+                    }
                 }
             }
         }
@@ -61,6 +69,7 @@ pipeline {
 
                     sh '''
                     echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+
                     docker push $IMAGE_NAME
                     '''
                 }
@@ -85,7 +94,7 @@ pipeline {
         always {
             sh '''
             docker rmi $IMAGE_NAME || true
-            docker image prune -f
+            docker image prune -f || true
             '''
         }
     }
