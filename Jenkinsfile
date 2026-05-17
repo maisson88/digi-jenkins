@@ -1,52 +1,92 @@
 pipeline {
     agent any
-    
+
     environment {
-        SONAR_HOST = 'http://localhost:9000'
-        SONAR_TOKEN = credentials('sonar-token')
+        IMAGE_NAME = "maisoonahmed71/service-app:${BUILD_NUMBER}"
     }
-    
+
     stages {
-        stage('Checkout') {
+
+        stage('Checkout Code') {
             steps {
-                git branch: 'main', 
-                    url: 'https://github.com/maisson88/digi-jenkins.git',
-                    credentialsId: 'github-pat-creds'
+                git branch: 'main',
+                credentialsId: 'github-pat-creds',
+                url: 'https://github.com/maisson88/digi-jenkins.git'
             }
         }
-        
+
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv('SonarQube') {
+                withSonarQubeEnv('sonarqube') {
                     sh '''
-                        sonar-scanner \
-                        -Dsonar.projectKey=service-app \
-                        -Dsonar.sources=. \
-                        -Dsonar.host.url=${SONAR_HOST} \
-                        -Dsonar.login=${SONAR_TOKEN}
+                    sonar-scanner \
+                      -Dsonar.projectKey=service-app \
+                      -Dsonar.sources=src
                     '''
                 }
             }
         }
-        
-        stage('Quality Gate Check') {
+
+        stage('Quality Gate') {
             steps {
-                timeout(time: 1, unit: 'HOURS') {
+                timeout(time: 2, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
             }
         }
+
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                docker build -t $IMAGE_NAME .
+                '''
+            }
+        }
+
+        stage('Trivy Scan') {
+            steps {
+                sh '''
+                trivy image --exit-code 1 --severity CRITICAL $IMAGE_NAME
+                '''
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USERNAME',
+                    passwordVariable: 'DOCKER_PASSWORD'
+                )]) {
+
+                    sh '''
+                    echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+                    docker push $IMAGE_NAME
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                sh '''
+                docker rm -f service-app-container || true
+
+                docker run -d \
+                  --name service-app-container \
+                  -p 8081:80 \
+                  $IMAGE_NAME
+                '''
+            }
+        }
     }
-    
+
     post {
         always {
-            echo 'Pipeline job finished.'
-        }
-        success {
-            echo 'SonarQube analysis completed successfully!'
-        }
-        failure {
-            echo 'Pipeline failed. Please check the logs.'
+            sh '''
+            docker rmi $IMAGE_NAME || true
+            docker image prune -f
+            '''
         }
     }
 }
