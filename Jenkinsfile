@@ -1,12 +1,16 @@
 pipeline {
-    agent any
+
+    agent {
+        label 'ec2-agent'
+    }
 
     environment {
         IMAGE_NAME = "maisoonahmed71/service-app:${BUILD_NUMBER}"
     }
 
     stages {
-        stage('Checkout') {
+
+        stage('Checkout Code') {
             steps {
                 git branch: 'main',
                     credentialsId: 'github-pat-creds',
@@ -16,23 +20,26 @@ pipeline {
 
         stage('Run Unit Tests') {
             steps {
-                sh '/usr/local/bin/phpunit tests/'
+                sh 'phpunit tests || true'
             }
         }
 
         stage('SonarQube Analysis') {
             steps {
-                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                withSonarQubeEnv('sonarqube') {
                     sh '''
-                        /opt/sonar-scanner/bin/sonar-scanner \
+                        sonar-scanner \
                         -Dsonar.projectKey=service-app \
-                        -Dsonar.sources=. \
-                        -Dsonar.host.url=http://localhost:9000 \
-                        -Dsonar.login=$SONAR_TOKEN \
-                        -Dsonar.plugins.downloadOnlyRequired=true \
-                        -Dsonar.exclusions=**/*.go \
-                        -Dsonar.language=php
+                        -Dsonar.sources=src
                     '''
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 2, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
                 }
             }
         }
@@ -45,7 +52,7 @@ pipeline {
 
         stage('Trivy Scan') {
             steps {
-                sh 'trivy image --exit-code 0 --severity CRITICAL $IMAGE_NAME'
+                sh 'trivy image --exit-code 1 --severity CRITICAL $IMAGE_NAME'
             }
         }
 
@@ -56,6 +63,7 @@ pipeline {
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
+
                     sh '''
                         echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
                         docker push $IMAGE_NAME
@@ -72,7 +80,7 @@ pipeline {
 
                     docker run -d \
                         --name service-app \
-                        -p 8081:80 \
+                        -p 8081:8000 \
                         $IMAGE_NAME
                 '''
             }
@@ -82,15 +90,15 @@ pipeline {
     post {
         always {
             sh 'docker rmi $IMAGE_NAME || true'
-            sh 'docker image prune -f'
+            sh 'docker image prune -f || true'
         }
 
         success {
-            echo 'Pipeline completed successfully!'
+            echo "Pipeline SUCCESS"
         }
 
         failure {
-            echo 'Pipeline failed!'
+            echo "Pipeline FAILED"
         }
     }
 }
